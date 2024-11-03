@@ -1,12 +1,42 @@
 import React from "react";
 import Logo from "../logo.svg";
-import Eth from "../eth.svg";
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Modal } from "antd";
+import { DownOutlined } from "@ant-design/icons";
+import networkList from "../networkList.json";
 
 function Header(props) {
-  const { address, isConnected, connect } = props;
+  const { address, isConnected, connect, network, setSelectedNetwork } = props;
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const handleSelectNetwork = (network) => {
+    setSelectedNetwork(network);
+    setIsModalVisible(false);
+    console.log("Network: " + network.name);
+  };
+
   return (
     <header>
+      <Modal
+        open={isModalVisible}
+        footer={null}
+        onCancel={() => setIsModalVisible(false)}
+        title="Select a network"
+      >
+        {networkList.map((e, i) => (
+          <div
+            className="tokenChoice"
+            key={i}
+            onClick={() => handleSelectNetwork(networkList[i])}
+          >
+            <img src={e.img} alt={e.name} className="tokenLogo" />
+            <div className="tokenChoiceNames">
+              <div className="tokenName">{e.name}</div>
+            </div>
+          </div>
+        ))}
+      </Modal>
       <div className="leftH">
         <img src={Logo} alt="logo" className="logo" />
         <Link to="/" className="link">
@@ -17,9 +47,10 @@ function Header(props) {
         </Link>
       </div>
       <div className="rightH">
-        <div className="headerItem">
-          <img src={Eth} alt="eth" className="eth" />
-          Ethereum
+        <div className="headerItem" onClick={() => setIsModalVisible(true)}>
+          <img src={network.img} alt="logo" className="eth" />
+          {network.name}
+          <DownOutlined />
         </div>
         <div className="connectButton" onClick={connect}>
           {isConnected

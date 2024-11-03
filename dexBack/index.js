@@ -28,7 +28,7 @@ app.get("/tokenPrice", async (req, res) => {
 });
 
 Moralis.start({
-  apiKey: process.env.MORALIS_KEY,
+  apiKey: process.env.REACT_APP_MORALIS_KEY,
 }).then(() => {
   app.listen(port, () => {
     console.log(`Listening for API Calls`);

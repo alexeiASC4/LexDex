@@ -1,0 +1,14 @@
+[
+  {
+    "img": "/eth.svg",
+    "name": "Ethereum",
+    "id": "1",
+    "swapContractAddress": "0xdef1c0ded9bec7f1a1670819833240f027b25eff"
+  },
+  {
+    "img": "/base.svg",
+    "name": "Base",
+    "id": "8453",
+    "swapContractAddress": "0xbc3c5ca50b6a215edf00815965485527f26f5da8"
+  }
+]

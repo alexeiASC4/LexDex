@@ -6,112 +6,309 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import tokenList from "../tokenList.json";
+import { ethers } from "ethers";
+import { useSendTransaction } from "wagmi";
 import axios from "axios";
 
-function Swap() {
+const TOKEN_ABI = [
+  // Transfer function
+  "function transfer(address to, uint amount) returns (bool)",
+  // Approve function for allowance
+  "function approve(address spender, uint amount) returns (bool)",
+  // Allowance function
+  "function allowance(address owner, address spender) view returns (uint)",
+  // BalanceOf function
+  "function balanceOf(address account) view returns (uint)",
+  // Decimals function
+  "function decimals() view returns (uint8)",
+];
+
+function Swap({ address, isConnected, selectedNetwork }) {
   const [slippage, setSlippage] = useState(0.5);
   const [tokenOneAmount, setTokenOneAmount] = useState(null);
   const [tokenTwoAmount, setTokenTwoAmount] = useState(null);
   const [tokenOne, setTokenOne] = useState(tokenList[0]);
   const [tokenTwo, setTokenTwo] = useState(tokenList[1]);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [changeToken, setChangeToken] = useState(1);
   const [prices, setPrices] = useState(null);
+  const [swapApproved, setSwapApproved] = useState(false);
+  const [txDetails, setTxDetails] = useState({
+    to: null,
+    data: null,
+    value: null,
+  });
 
-  function handleSlippageChange(e) {
-    setSlippage(e.target.value);
-  }
+  const { sendTransaction } = useSendTransaction({
+    request: {
+      from: address,
+      to: txDetails.to,
+      data: txDetails.data,
+      value: txDetails.value,
+      gasLimit: ethers.BigNumber.from("100000000"), // example gas limit
+    },
+  });
 
-  function changeAmount(e) {
+  const handleSlippageChange = (e) => setSlippage(e.target.value);
+
+  const changeAmount = async (e) => {
     setTokenOneAmount(e.target.value);
+    if (!prices) {
+      await fetchPrices();
+    }
+
     if (e.target.value && prices) {
       setTokenTwoAmount((e.target.value * prices.ratio).toFixed(2));
-    } else {
-      setTokenTwoAmount(null);
     }
-  }
+  };
 
-  function clearPrices() {
+  const clearPrices = () => {
     setPrices(null);
     setTokenOneAmount(null);
     setTokenTwoAmount(null);
-  }
+  };
 
-  function switchTokens() {
+  const switchTokens = () => {
     clearPrices();
-    const one = tokenOne;
-    const two = tokenTwo;
-    setTokenOne(two);
-    setTokenTwo(one);
-    fetchPrices(two.address, one.address);
-  }
+    const [one, two] = [tokenTwo, tokenOne];
+    setTokenOne(one);
+    setTokenTwo(two);
+  };
 
-  function openModal(asset) {
+  const openModal = (asset) => {
     setChangeToken(asset);
-    setIsOpen(true);
-  }
+    setIsModalVisible(true);
+  };
 
-  function modifyToken(i) {
+  const modifyToken = (i) => {
     clearPrices();
+    const newToken = tokenList[i];
     if (changeToken === 1) {
-      setTokenOne(tokenList[i]);
-      fetchPrices(tokenList[i].address, tokenTwo.address);
+      setTokenOne(newToken);
     } else {
-      setTokenTwo(tokenList[i]);
-      fetchPrices(tokenOne.address, tokenList[i].address);
+      setTokenTwo(newToken);
     }
-    setIsOpen(false);
-  }
+    setIsModalVisible(false);
+  };
 
-  async function fetchPrices(one, two) {
+  const fetchPrices = async () => {
     const res = await axios.get("http://localhost:3001/tokenPrice", {
-      params: { addressOne: one, addressTwo: two },
+      params: { addressOne: tokenOne.address, addressTwo: tokenTwo.address },
     });
     setPrices(res.data);
-  }
+  };
 
+  const handleApprove = async () => {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+
+      const sellTokenAddress =
+        selectedNetwork.id === "1" ? tokenOne.address : tokenOne.base_address;
+      const buyTokenAddress =
+        selectedNetwork.id === "1" ? tokenTwo.address : tokenTwo.base_address;
+
+      const priceParams = new URLSearchParams({
+        chainId: selectedNetwork.id,
+        sellToken: sellTokenAddress,
+        buyToken: buyTokenAddress,
+        sellAmount: ethers.utils.parseUnits(
+          tokenOneAmount.toString(),
+          tokenOne.decimals
+        ),
+        taker: address,
+      });
+
+      // Fetch the price quote from your API
+      const priceResponse = await fetch(
+        "http://localhost:5000/api/0x-price?" + priceParams.toString()
+      );
+      const priceResponseJson = await priceResponse.json();
+      console.log("priceR:", JSON.stringify(priceResponseJson, null, 2));
+
+      // Check for sufficient liquidity before proceeding with approval
+      if (!priceResponseJson.liquidityAvailable) {
+        throw new Error("Insufficient liquidity for this trade.");
+      }
+
+      const tokenContract = new ethers.Contract(
+        sellTokenAddress,
+        TOKEN_ABI,
+        signer
+      );
+
+      // Use allowance target from price response if available
+      const allowanceTarget = "0x000000000022d473030f116ddee9f6b43ac78ba3"; //Permit2 address
+      // priceResponseJson.issues.allowance?.spender ||
+      // selectedNetwork.swapContractAddress;
+      if (!allowanceTarget) {
+        throw new Error("Allowance target not defined or invalid.");
+      }
+      console.log("Allowance Target:", allowanceTarget);
+
+      let allowance;
+      try {
+        allowance = await tokenContract.allowance(address, allowanceTarget);
+        console.log("Current Allowance:", allowance.toString());
+      } catch (error) {
+        console.warn(
+          "Allowance function not supported, proceeding with approve only:",
+          error
+        );
+        allowance = ethers.constants.Zero; // Set to zero to ensure approval proceeds
+      }
+
+      const sellAmount = ethers.utils.parseUnits(
+        tokenOneAmount.toString(),
+        tokenOne.decimals
+      );
+
+      console.log("sell amount:", sellAmount);
+
+      if (allowance.lt(sellAmount)) {
+        // Call approve directly if allowance is insufficient or unsupported
+        const approveTx = await tokenContract.approve(
+          allowanceTarget,
+          sellAmount
+        );
+        console.log("Approve tx:", approveTx);
+        await approveTx.wait();
+        message.success("Approval transaction successful.");
+      } else {
+        console.log("Approval already sufficient.");
+      }
+
+      setSwapApproved(true);
+      message.success("Approval confirmed. Proceed with the swap.");
+    } catch (error) {
+      console.error("Approval error:", error);
+      message.error("Approval failed. Please try again.");
+    }
+  };
+
+  const handleSwap = async () => {
+    try {
+      console.log("Starting handleSwap");
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+      const sellTokenAddress =
+        selectedNetwork.id === "1" ? tokenOne.address : tokenOne.base_address;
+      const buyTokenAddress =
+        selectedNetwork.id === "1" ? tokenTwo.address : tokenTwo.base_address;
+
+      const quoteParams = new URLSearchParams({
+        chainId: selectedNetwork.id,
+        sellToken: sellTokenAddress,
+        buyToken: buyTokenAddress,
+        sellAmount: ethers.utils.parseUnits(
+          tokenOneAmount.toString(),
+          tokenOne.decimals
+        ),
+        taker: address,
+      });
+
+      const quoteResponse = await fetch(
+        "http://localhost:5000/api/0x-quote?" + quoteParams.toString()
+      );
+      const quoteResponseJson = await quoteResponse.json();
+      console.log(
+        "Quote Response:",
+        JSON.stringify(quoteResponseJson, null, 2)
+      );
+
+      const transaction = quoteResponseJson.transaction;
+      if (!transaction || !transaction.to) {
+        throw new Error("Transaction details are incomplete or invalid.");
+      }
+
+      const { to, data, value } = transaction;
+
+      try {
+        console.log("Simulating transaction...");
+        const simulationResult = await provider.call({
+          to,
+          data,
+          from: address,
+          value: value || 0,
+        });
+        console.log(
+          "Transaction simulation successful, result:",
+          simulationResult
+        );
+      } catch (simulationError) {
+        console.error("Transaction simulation failed:", simulationError);
+        message.error(
+          "Transaction likely to fail. Check token support and allowance."
+        );
+        return; // Exit early if simulation fails
+      }
+
+      console.log("Prepared txDetails for MetaMask:", { to, data, value });
+      setTxDetails({ to, data, value });
+    } catch (error) {
+      console.error("Swap error:", error);
+      message.error("Swap failed. Please try again.");
+    }
+  };
+
+  // Effect to listen for changes in txDetails and execute the transaction
   useEffect(() => {
-    fetchPrices(tokenList[0].address, tokenList[1].address);
-  }, []);
+    const executeTransaction = async () => {
+      if (txDetails.to && isConnected) {
+        console.log("Executing transaction with txDetails:", txDetails);
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const result = await provider.call({
+            from: address,
+            to: txDetails.to,
+            data: txDetails.data,
+            value: txDetails.value,
+          });
+          console.log("Transaction simulation successful, result:", result);
+
+          // Proceed with sendTransaction if simulation is successful
+          sendTransaction();
+          message.success("Swap successful!");
+        } catch (error) {
+          console.error("Transaction Error:", error);
+          message.error("Transaction failed. Please try again.");
+        }
+      }
+    };
+    executeTransaction();
+  }, [txDetails, isConnected]); // This will run when txDetails changes
 
   const settings = (
-    <>
+    <div>
       <div>Slippage Tolerance</div>
-      <div>
-        <Radio.Group value={slippage} onChange={handleSlippageChange}>
-          <Radio.Button value={0.5}>0.5%</Radio.Button>
-          <Radio.Button value={1}>1%</Radio.Button>
-          <Radio.Button value={2.5}>2.5%</Radio.Button>
-          <Radio.Button value={5}>5%</Radio.Button>
-        </Radio.Group>
-      </div>
-    </>
+      <Radio.Group value={slippage} onChange={handleSlippageChange}>
+        <Radio.Button value={0.5}>0.5%</Radio.Button>
+        <Radio.Button value={1}>1%</Radio.Button>
+        <Radio.Button value={2.5}>2.5%</Radio.Button>
+        <Radio.Button value={5}>5%</Radio.Button>
+      </Radio.Group>
+    </div>
   );
 
   return (
     <>
       <Modal
-        open={isOpen}
+        open={isModalVisible}
         footer={null}
-        onCancel={() => setIsOpen(false)}
+        onCancel={() => setIsModalVisible(false)}
         title="Select a token"
       >
         <div className="modalContent">
-          {tokenList?.map((e, i) => {
-            return (
-              <div
-                className="tokenChoice"
-                key={i}
-                onClick={() => modifyToken(i)}
-              >
-                <img src={e.img} alt={e.ticker} className="tokenLogo" />
-                <div className="tokenChoiceNames">
-                  <div className="tokenName">{e.name}</div>
-                  <div className="tokenTicker">{e.ticker}</div>
-                </div>
+          {tokenList.map((e, i) => (
+            <div className="tokenChoice" key={i} onClick={() => modifyToken(i)}>
+              <img src={e.img} alt={e.ticker} className="tokenLogo" />
+              <div className="tokenChoiceNames">
+                <div className="tokenName">{e.name}</div>
+                <div className="tokenTicker">{e.ticker}</div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </Modal>
       <div className="tradeBox">
@@ -131,9 +328,8 @@ function Swap() {
             placeholder="0"
             value={tokenOneAmount}
             onChange={changeAmount}
-            disabled={!prices}
           />
-          <Input placeholder="0" value={tokenTwoAmount} disabled={true} />
+          <Input placeholder="0" value={tokenTwoAmount} disabled />
           <div className="switchButton" onClick={switchTokens}>
             <ArrowDownOutlined className="switchArrow" />
           </div>
@@ -148,8 +344,12 @@ function Swap() {
             <DownOutlined />
           </div>
         </div>
-        <div className="swapButton" disabled={!tokenOneAmount}>
-          Swap
+        <div
+          className="swapButton"
+          disabled={!tokenOneAmount || !isConnected}
+          onClick={swapApproved ? handleSwap : handleApprove}
+        >
+          {swapApproved ? "Confirm Swap" : "Approve Swap"}
         </div>
       </div>
     </>
