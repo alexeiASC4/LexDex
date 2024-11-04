@@ -2,7 +2,7 @@ import React from "react";
 import Logo from "../logo.svg";
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Modal } from "antd";
+import { Modal, message } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 import networkList from "../networkList.json";
 
@@ -14,6 +14,7 @@ function Header(props) {
     setSelectedNetwork(network);
     setIsModalVisible(false);
     console.log("Network: " + network.name);
+    message.info(`Make sure wallet is connected to ${network.name}`);
   };
 
   return (
@@ -38,7 +39,17 @@ function Header(props) {
         ))}
       </Modal>
       <div className="leftH">
-        <img src={Logo} alt="logo" className="logo" />
+        <div
+          style={{
+            color: "#7ff9ff",
+            fontFamily: "fantasy",
+            alignItems: "center",
+            display: "flex",
+          }}
+        >
+          <img src={Logo} alt="logo" className="logo" />
+          <h2 style={{ paddingTop: "5px" }}>LexDex</h2>
+        </div>
         <Link to="/" className="link">
           <div className="headerItem">Swap</div>
         </Link>
@@ -47,7 +58,15 @@ function Header(props) {
         </Link>
       </div>
       <div className="rightH">
-        <div className="headerItem" onClick={() => setIsModalVisible(true)}>
+        <div
+          className="headerItem"
+          style={{
+            backgroundColor: "#243056",
+            borderRadius: "100px",
+            gap: "5px",
+          }}
+          onClick={() => setIsModalVisible(true)}
+        >
           <img src={network.img} alt="logo" className="eth" />
           {network.name}
           <DownOutlined />

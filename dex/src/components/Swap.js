@@ -25,6 +25,8 @@ const TOKEN_ABI = [
 
 function Swap({ address, isConnected, selectedNetwork }) {
   const [slippage, setSlippage] = useState(0.5);
+  const [tokenOneBalance, setTokenOneBalance] = useState(null);
+  const [tokenTwoBalance, setTokenTwoBalance] = useState(null);
   const [tokenOneAmount, setTokenOneAmount] = useState(null);
   const [tokenTwoAmount, setTokenTwoAmount] = useState(null);
   const [tokenOne, setTokenOne] = useState(tokenList[0]);
@@ -37,19 +39,85 @@ function Swap({ address, isConnected, selectedNetwork }) {
     to: null,
     data: null,
     value: null,
+    gas: null,
+    gasPrice: null,
   });
 
   const { sendTransaction } = useSendTransaction({
-    request: {
-      from: address,
-      to: txDetails.to,
-      data: txDetails.data,
-      value: txDetails.value,
-      gasLimit: ethers.BigNumber.from("100000000"), // example gas limit
+    onError(error) {
+      console.error("Transaction Error:", error);
+      message.error("Transaction failed. Please try again.");
+    },
+    onSuccess(txResponse) {
+      console.log("Transaction sent:", txResponse);
+      message.info("Transaction sent. Waiting for confirmation...");
+
+      // Define an async function to handle the transaction confirmation
+      const confirmTransaction = async () => {
+        try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const receipt = await provider.waitForTransaction(txResponse.hash);
+          console.log("Transaction confirmed:", receipt);
+          message.success("Transaction confirmed!");
+        } catch (waitError) {
+          console.error(
+            "Error waiting for transaction confirmation:",
+            waitError
+          );
+          message.error("Error during transaction confirmation.");
+        }
+      };
+
+      // Call the async function to handle the transaction confirmation
+      confirmTransaction();
     },
   });
 
   const handleSlippageChange = (e) => setSlippage(e.target.value);
+
+  const fetchTokenBalances = async () => {
+    if (!address || !isConnected) return;
+
+    const tokenOneAddress =
+      selectedNetwork.id === "1" ? tokenOne.address : tokenOne.base_address;
+    const tokenTwoAddress =
+      selectedNetwork.id === "1" ? tokenTwo.address : tokenTwo.base_address;
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const tokenOneContract = new ethers.Contract(
+      tokenOneAddress,
+      TOKEN_ABI,
+      provider
+    );
+    const tokenTwoContract = new ethers.Contract(
+      tokenTwoAddress,
+      TOKEN_ABI,
+      provider
+    );
+
+    try {
+      const [tokenOneDecimals, tokenTwoDecimals] = await Promise.all([
+        tokenOneContract.decimals(),
+        tokenTwoContract.decimals(),
+      ]);
+
+      const [balanceOne, balanceTwo] = await Promise.all([
+        tokenOneContract.balanceOf(address),
+        tokenTwoContract.balanceOf(address),
+      ]);
+
+      setTokenOneBalance(
+        ethers.utils.formatUnits(balanceOne, tokenOneDecimals)
+      );
+      setTokenTwoBalance(
+        ethers.utils.formatUnits(balanceTwo, tokenTwoDecimals)
+      );
+    } catch (error) {
+      console.error("Error fetching token balances or decimals:", error);
+      message.error(
+        "Failed to fetch token balances. Make sure LexDex is connected to the same Network as your wallet."
+      );
+    }
+  };
 
   const changeAmount = async (e) => {
     setTokenOneAmount(e.target.value);
@@ -66,6 +134,11 @@ function Swap({ address, isConnected, selectedNetwork }) {
     setPrices(null);
     setTokenOneAmount(null);
     setTokenTwoAmount(null);
+  };
+
+  const resetInterface = () => {
+    clearPrices();
+    fetchTokenBalances();
   };
 
   const switchTokens = () => {
@@ -138,9 +211,9 @@ function Swap({ address, isConnected, selectedNetwork }) {
       );
 
       // Use allowance target from price response if available
-      const allowanceTarget = "0x000000000022d473030f116ddee9f6b43ac78ba3"; //Permit2 address
-      // priceResponseJson.issues.allowance?.spender ||
-      // selectedNetwork.swapContractAddress;
+      const allowanceTarget =
+        priceResponseJson.issues.allowance?.spender ||
+        "0x000000000022d473030f116ddee9f6b43ac78ba3"; //Permit2 address;
       if (!allowanceTarget) {
         throw new Error("Allowance target not defined or invalid.");
       }
@@ -173,13 +246,12 @@ function Swap({ address, isConnected, selectedNetwork }) {
         );
         console.log("Approve tx:", approveTx);
         await approveTx.wait();
-        message.success("Approval transaction successful.");
+        message.success("Approval confirmed. Proceed with the swap.");
       } else {
         console.log("Approval already sufficient.");
       }
 
       setSwapApproved(true);
-      message.success("Approval confirmed. Proceed with the swap.");
     } catch (error) {
       console.error("Approval error:", error);
       message.error("Approval failed. Please try again.");
@@ -222,13 +294,51 @@ function Swap({ address, isConnected, selectedNetwork }) {
         throw new Error("Transaction details are incomplete or invalid.");
       }
 
-      const { to, data, value } = transaction;
+      const { to, data, gas, gasPrice, value } = transaction;
+
+      // Set up domain and types
+      const domain = {
+        name: "Permit2",
+        chainId: selectedNetwork.id,
+        verifyingContract:
+          quoteResponseJson.permit2.eip712.domain.verifyingContract,
+      };
+
+      const types = {
+        TokenPermissions: [
+          { name: "token", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+        PermitTransferFrom: [
+          { name: "permitted", type: "TokenPermissions" },
+          { name: "spender", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      };
+
+      const message = quoteResponseJson.permit2.eip712.message;
+
+      const signer = provider.getSigner();
+      const signature = await signer._signTypedData(domain, types, message);
+
+      const signatureBytes = ethers.utils.arrayify(signature);
+      const signatureLength = ethers.utils.hexlify(signatureBytes.length);
+      const signatureLengthPadded = ethers.utils.hexZeroPad(
+        signatureLength,
+        32
+      );
+      const dataWithSignature = ethers.utils.hexConcat([
+        data,
+        signatureLengthPadded,
+        signatureBytes,
+      ]);
 
       try {
         console.log("Simulating transaction...");
         const simulationResult = await provider.call({
           to,
-          data,
+          dataWithSignature,
           from: address,
           value: value || 0,
         });
@@ -244,40 +354,53 @@ function Swap({ address, isConnected, selectedNetwork }) {
         return; // Exit early if simulation fails
       }
 
-      console.log("Prepared txDetails for MetaMask:", { to, data, value });
-      setTxDetails({ to, data, value });
+      setTxDetails({
+        to: String(to),
+        data: String(dataWithSignature),
+        value: value,
+        gas: gas,
+        gasPrice: gasPrice,
+      });
+      console.log("Set txDetails for MetaMask:", {
+        to: txDetails.to,
+        data: txDetails.data,
+        value: txDetails.value,
+        gas: txDetails.gas,
+        gasPrice: txDetails.gasPrice,
+      });
+
+      console.log("Values passed to sendTransaction:", {
+        from: address,
+        to: to,
+        data: dataWithSignature,
+        value: value,
+        gas: gas,
+        gasPrice: gasPrice,
+      });
+
+      sendTransaction({
+        from: address,
+        to: to,
+        data: dataWithSignature,
+        value: value,
+        gasLimit: gas,
+        gasPrice: gasPrice,
+      });
     } catch (error) {
       console.error("Swap error:", error);
       message.error("Swap failed. Please try again.");
     }
   };
 
-  // Effect to listen for changes in txDetails and execute the transaction
   useEffect(() => {
-    const executeTransaction = async () => {
-      if (txDetails.to && isConnected) {
-        console.log("Executing transaction with txDetails:", txDetails);
-        try {
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          const result = await provider.call({
-            from: address,
-            to: txDetails.to,
-            data: txDetails.data,
-            value: txDetails.value,
-          });
-          console.log("Transaction simulation successful, result:", result);
+    fetchTokenBalances();
+  }, [address, isConnected, tokenOne, tokenTwo]);
 
-          // Proceed with sendTransaction if simulation is successful
-          sendTransaction();
-          message.success("Swap successful!");
-        } catch (error) {
-          console.error("Transaction Error:", error);
-          message.error("Transaction failed. Please try again.");
-        }
-      }
-    };
-    executeTransaction();
-  }, [txDetails, isConnected]); // This will run when txDetails changes
+  useEffect(() => {
+    if (selectedNetwork) {
+      resetInterface();
+    }
+  }, [selectedNetwork]);
 
   const settings = (
     <div>
@@ -311,7 +434,7 @@ function Swap({ address, isConnected, selectedNetwork }) {
           ))}
         </div>
       </Modal>
-      <div className="tradeBox">
+      <div className="tradeBox" style={{ display: "inline" }}>
         <div className="tradeBoxHeader">
           <h4>Swap</h4>
           <Popover
@@ -324,24 +447,74 @@ function Swap({ address, isConnected, selectedNetwork }) {
           </Popover>
         </div>
         <div className="inputs">
-          <Input
-            placeholder="0"
-            value={tokenOneAmount}
-            onChange={changeAmount}
-          />
-          <Input placeholder="0" value={tokenTwoAmount} disabled />
+          <div style={{ position: "relative" }}>
+            <Input
+              placeholder="0"
+              value={tokenOneAmount}
+              onChange={changeAmount}
+              style={{ width: "100%" }}
+            />
+            <div className="assetOne" onClick={() => openModal(1)}>
+              <img
+                src={tokenOne.img}
+                alt="assetOneLogo"
+                className="assetLogo"
+              />
+              {tokenOne.ticker}
+              <DownOutlined />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                top: "20%",
+                right: "20px",
+                transform: "translateY(-50%)",
+                fontSize: "0.7em",
+                color: "#fff",
+                pointerEvents: "none", // Prevents interaction with the balance text
+              }}
+              hidden={!isConnected}
+            >
+              Balance: {tokenOneBalance || 0} {tokenOne.ticker}
+            </div>
+          </div>
+          <div style={{ position: "relative" }}>
+            <Input
+              placeholder="0"
+              value={tokenTwoAmount}
+              style={{ width: "100%" }}
+              disabled
+            />
+            <div
+              className="assetTwo"
+              style={{ marginTop: "-100px" }}
+              onClick={() => openModal(2)}
+            >
+              <img
+                src={tokenTwo.img}
+                alt="assetTwoLogo"
+                className="assetLogo"
+              />
+              {tokenTwo.ticker}
+              <DownOutlined />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                top: "20%",
+                right: "20px",
+                transform: "translateY(-50%)",
+                fontSize: "0.7em",
+                color: "#fff",
+                pointerEvents: "none",
+              }}
+              hidden={!isConnected}
+            >
+              Balance: {tokenTwoBalance || 0} {tokenTwo.ticker}
+            </div>
+          </div>
           <div className="switchButton" onClick={switchTokens}>
             <ArrowDownOutlined className="switchArrow" />
-          </div>
-          <div className="assetOne" onClick={() => openModal(1)}>
-            <img src={tokenOne.img} alt="assetOneLogo" className="assetLogo" />
-            {tokenOne.ticker}
-            <DownOutlined />
-          </div>
-          <div className="assetTwo" onClick={() => openModal(2)}>
-            <img src={tokenTwo.img} alt="assetTwoLogo" className="assetLogo" />
-            {tokenTwo.ticker}
-            <DownOutlined />
           </div>
         </div>
         <div
