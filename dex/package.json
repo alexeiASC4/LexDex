@@ -15,7 +15,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.6.2",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "scheduler": "^0.23.2",
     "typescript": "^4.9.5",
     "use-sync-external-store": "^1.2.2",
@@ -49,5 +49,5 @@
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11"
   },
-  "homepage": "https://username.github.io/repository"
+  "homepage": "."
 }
