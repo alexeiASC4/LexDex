@@ -21,6 +21,7 @@ Forked from this [repo](https://github.com/IAmJaysWay/dexStarter). I followed th
 - [x] User can switch between Ethereum and Base
 - [x] Use [0x Swap API](https://0x.org/products/swap) to facilitate swapping
 - [x] User shown their token balances for the selected tokens upon wallet connection
+- [x] Deployed backend server using [Render](https://render.com/)
 - [x] small UI changes
 
 ## Ideas for Further Development
