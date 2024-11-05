@@ -1,18 +1,18 @@
 {
   "files": {
     "main.css": "/LexDex/static/css/main.3b8af14b.css",
-    "main.js": "/LexDex/static/js/main.56ce5c63.js",
+    "main.js": "/LexDex/static/js/main.f6ad72ed.js",
     "static/js/801.d4e72715.chunk.js": "/LexDex/static/js/801.d4e72715.chunk.js",
     "static/js/507.002b6848.chunk.js": "/LexDex/static/js/507.002b6848.chunk.js",
     "static/media/logo.svg": "/LexDex/static/media/logo.574b5d583bcfcc2d3068b71363bc7a06.svg",
     "index.html": "/LexDex/index.html",
     "main.3b8af14b.css.map": "/LexDex/static/css/main.3b8af14b.css.map",
-    "main.56ce5c63.js.map": "/LexDex/static/js/main.56ce5c63.js.map",
+    "main.f6ad72ed.js.map": "/LexDex/static/js/main.f6ad72ed.js.map",
     "801.d4e72715.chunk.js.map": "/LexDex/static/js/801.d4e72715.chunk.js.map",
     "507.002b6848.chunk.js.map": "/LexDex/static/js/507.002b6848.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.3b8af14b.css",
-    "static/js/main.56ce5c63.js"
+    "static/js/main.f6ad72ed.js"
   ]
 }

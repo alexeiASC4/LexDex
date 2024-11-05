@@ -29,7 +29,7 @@ function App() {
       <div className="mainWindow">
         <Routes>
           <Route
-            path="/"
+            path="/LexDex/"
             element={
               <Swap
                 isConnected={isConnected}
