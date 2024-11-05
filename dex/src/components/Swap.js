@@ -165,9 +165,12 @@ function Swap({ address, isConnected, selectedNetwork }) {
   };
 
   const fetchPrices = async () => {
-    const res = await axios.get("http://localhost:3001/tokenPrice", {
-      params: { addressOne: tokenOne.address, addressTwo: tokenTwo.address },
-    });
+    const res = await axios.get(
+      "https://lexdex-moralis.onrender.com/tokenPrice",
+      {
+        params: { addressOne: tokenOne.address, addressTwo: tokenTwo.address },
+      }
+    );
     setPrices(res.data);
   };
 
@@ -194,7 +197,7 @@ function Swap({ address, isConnected, selectedNetwork }) {
 
       // Fetch the price quote from your API
       const priceResponse = await fetch(
-        "http://localhost:5000/api/0x-price?" + priceParams.toString()
+        "https://lexdex-0x.onrender.com/api/0x-price?" + priceParams.toString()
       );
       const priceResponseJson = await priceResponse.json();
       console.log("priceR:", JSON.stringify(priceResponseJson, null, 2));
@@ -281,7 +284,7 @@ function Swap({ address, isConnected, selectedNetwork }) {
       });
 
       const quoteResponse = await fetch(
-        "http://localhost:5000/api/0x-quote?" + quoteParams.toString()
+        "https://lexdex-0x.onrender.com/api/0x-quote?" + quoteParams.toString()
       );
       const quoteResponseJson = await quoteResponse.json();
       console.log(
