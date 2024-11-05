@@ -166,7 +166,7 @@ function Swap({ address, isConnected, selectedNetwork }) {
 
   const fetchPrices = async () => {
     const res = await axios.get(
-      "https://lexdex-moralis.onrender.com/tokenPrice",
+      "https://lexdex-moralis.onrender.com/tokenPrice?",
       {
         params: { addressOne: tokenOne.address, addressTwo: tokenTwo.address },
       }
