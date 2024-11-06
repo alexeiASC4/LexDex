@@ -7,7 +7,7 @@ import {
 } from "@ant-design/icons";
 import tokenList from "../tokenList.json";
 import { ethers } from "ethers";
-import { useSendTransaction } from "wagmi";
+import { useSendTransaction, useWaitForTransaction } from "wagmi";
 import axios from "axios";
 
 const TOKEN_ABI = [
@@ -43,16 +43,16 @@ function Swap({ address, isConnected, selectedNetwork }) {
     gasPrice: null,
   });
 
-  const { sendTransaction } = useSendTransaction({
+  const { data, sendTransaction } = useSendTransaction({
     onError(error) {
       console.error("Transaction Error:", error);
       message.error("Transaction failed. Please try again.");
     },
     onSuccess(txResponse) {
       console.log("Transaction sent:", txResponse);
+      message.destroy();
       message.info("Transaction sent. Waiting for confirmation...");
 
-      // Define an async function to handle the transaction confirmation
       const confirmTransaction = async () => {
         try {
           const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -68,9 +68,12 @@ function Swap({ address, isConnected, selectedNetwork }) {
         }
       };
 
-      // Call the async function to handle the transaction confirmation
       confirmTransaction();
     },
+  });
+
+  const { isLoading } = useWaitForTransaction({
+    hash: data?.hash,
   });
 
   const handleSlippageChange = (e) => setSlippage(e.target.value);
@@ -398,6 +401,11 @@ function Swap({ address, isConnected, selectedNetwork }) {
   useEffect(() => {
     fetchTokenBalances();
   }, [address, isConnected, tokenOne, tokenTwo]);
+
+  useEffect(() => {
+    message.destroy();
+    message.loading({ content: "Transaction is pending...", duration: 0 });
+  }, [isLoading]);
 
   useEffect(() => {
     if (selectedNetwork) {
