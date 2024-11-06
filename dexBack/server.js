@@ -5,7 +5,7 @@ const cors = require("cors");
 const app = express();
 const PORT = 5000;
 
-app.use(cors({ origin: "http://localhost:3000" }));
+app.use(cors());
 
 app.get("/api/0x-price", async (req, res) => {
   try {
