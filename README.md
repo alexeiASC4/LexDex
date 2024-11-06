@@ -1,11 +1,11 @@
 # LexDex
 
-This is a decentralized exchange (dex) for trading cryptocurrency on Ethereum and Base. For demo purposes, not optimized for production use.
-
-Forked from this [repo](https://github.com/IAmJaysWay/dexStarter). I followed this [tutorial](https://www.youtube.com/watch?v=t8U7GRrlYW8).
+A decentralized exchange (dex) for trading cryptocurrencies on Ethereum and Base. For demo purposes, not optimized for production use. Forked from this [repo](https://github.com/IAmJaysWay/dexStarter), initially followed this [tutorial](https://www.youtube.com/watch?v=t8U7GRrlYW8).
 
 ## Demo
-[demo here]
+![Demo](docs/LexDex.gif)
+
+GIF created with [LiceCap](http://www.cockos.com/licecap/).
 
 ## Implemented From Tutorial
 
@@ -29,4 +29,5 @@ Forked from this [repo](https://github.com/IAmJaysWay/dexStarter). I followed th
 - Extensive wallet support (i.e Wallet Connect)
 - Show fiat currency value equivalent underneath token amounts
 - User can choose their preferred fiat currency for fiat currency value
+- Use Wagmi's prepare send hooks for faster UI swap experience
 - Custom gas slippage
