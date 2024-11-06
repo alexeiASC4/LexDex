@@ -60,6 +60,7 @@ function Swap({ address, isConnected, selectedNetwork }) {
           const receipt = await provider.waitForTransaction(txResponse.hash);
           console.log("Transaction confirmed:", receipt);
           message.success("Transaction confirmed!");
+          resetInterface();
         } catch (waitError) {
           console.error(
             "Error waiting for transaction confirmation:",
