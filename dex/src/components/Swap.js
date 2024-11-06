@@ -7,7 +7,7 @@ import {
 } from "@ant-design/icons";
 import tokenList from "../tokenList.json";
 import { ethers } from "ethers";
-import { useSendTransaction, useWaitForTransaction } from "wagmi";
+import { useSendTransaction } from "wagmi";
 import axios from "axios";
 
 const TOKEN_ABI = [
@@ -22,6 +22,8 @@ const TOKEN_ABI = [
   // Decimals function
   "function decimals() view returns (uint8)",
 ];
+
+const PERMIT2_ADDRESS = "0x000000000022d473030f116ddee9f6b43ac78ba3";
 
 function Swap({ address, isConnected, selectedNetwork }) {
   const [slippage, setSlippage] = useState(0.5);
@@ -43,14 +45,13 @@ function Swap({ address, isConnected, selectedNetwork }) {
     gasPrice: null,
   });
 
-  const { data, sendTransaction } = useSendTransaction({
+  const { sendTransaction } = useSendTransaction({
     onError(error) {
       console.error("Transaction Error:", error);
       message.error("Transaction failed. Please try again.");
     },
     onSuccess(txResponse) {
       console.log("Transaction sent:", txResponse);
-      message.destroy();
       message.info("Transaction sent. Waiting for confirmation...");
 
       const confirmTransaction = async () => {
@@ -70,10 +71,6 @@ function Swap({ address, isConnected, selectedNetwork }) {
 
       confirmTransaction();
     },
-  });
-
-  const { isLoading } = useWaitForTransaction({
-    hash: data?.hash,
   });
 
   const handleSlippageChange = (e) => setSlippage(e.target.value);
@@ -117,7 +114,7 @@ function Swap({ address, isConnected, selectedNetwork }) {
     } catch (error) {
       console.error("Error fetching token balances or decimals:", error);
       message.error(
-        "Failed to fetch token balances. Make sure LexDex is connected to the same Network as your wallet."
+        "Failed to fetch token balances. LexDex must be connected to same network as MetaMask."
       );
     }
   };
@@ -198,14 +195,12 @@ function Swap({ address, isConnected, selectedNetwork }) {
         taker: address,
       });
 
-      // Fetch the price quote from your API
       const priceResponse = await fetch(
         "https://lexdex-0x.onrender.com/api/0x-price?" + priceParams.toString()
       );
       const priceResponseJson = await priceResponse.json();
       console.log("priceR:", JSON.stringify(priceResponseJson, null, 2));
 
-      // Check for sufficient liquidity before proceeding with approval
       if (!priceResponseJson.liquidityAvailable) {
         throw new Error("Insufficient liquidity for this trade.");
       }
@@ -216,10 +211,8 @@ function Swap({ address, isConnected, selectedNetwork }) {
         signer
       );
 
-      // Use allowance target from price response if available
       const allowanceTarget =
-        priceResponseJson.issues.allowance?.spender ||
-        "0x000000000022d473030f116ddee9f6b43ac78ba3"; //Permit2 address;
+        priceResponseJson.issues.allowance?.spender || PERMIT2_ADDRESS;
       if (!allowanceTarget) {
         throw new Error("Allowance target not defined or invalid.");
       }
@@ -302,7 +295,6 @@ function Swap({ address, isConnected, selectedNetwork }) {
 
       const { to, data, gas, gasPrice, value } = transaction;
 
-      // Set up domain and types
       const domain = {
         name: "Permit2",
         chainId: selectedNetwork.id,
@@ -401,11 +393,6 @@ function Swap({ address, isConnected, selectedNetwork }) {
   useEffect(() => {
     fetchTokenBalances();
   }, [address, isConnected, tokenOne, tokenTwo]);
-
-  useEffect(() => {
-    message.destroy();
-    message.loading({ content: "Transaction is pending...", duration: 0 });
-  }, [isLoading]);
 
   useEffect(() => {
     if (selectedNetwork) {
