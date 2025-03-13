@@ -120,12 +120,8 @@ function Swap({ address, isConnected, selectedNetwork }) {
     }
   };
 
-  const changeAmount = async (e) => {
+  const changeAmount = (e) => {
     setTokenOneAmount(e.target.value);
-    if (!prices) {
-      await fetchPrices();
-    }
-
     if (e.target.value && prices) {
       setTokenTwoAmount((e.target.value * prices.ratio).toFixed(2));
     }
@@ -400,6 +396,10 @@ function Swap({ address, isConnected, selectedNetwork }) {
       resetInterface();
     }
   }, [selectedNetwork]);
+
+  useEffect(() => {
+    fetchPrices();
+  }, [tokenOne, tokenTwo]);
 
   const settings = (
     <div>
